@@ -29,3 +29,11 @@ seaborn
 pyyaml
 tqdm
 tensorboard
+
+# ── Demonstrations ────────────────────────────────────────
+streamlit 
+rdkit-pypi 
+torch 
+numpy 
+matplotlib 
+scikit-learn
