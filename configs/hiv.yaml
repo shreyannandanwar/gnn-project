@@ -1,0 +1,12 @@
+# configs/hiv.yaml
+# HIV: severely imbalanced (~3.5% positive), ~41k molecules
+model:
+  hidden_dim: 128
+  n_layers: 4
+  num_tasks: 1
+
+training:
+  batch: 128       # larger dataset — bigger batch for speed
+  lr: 0.001
+  epochs: 200
+  patience: 30

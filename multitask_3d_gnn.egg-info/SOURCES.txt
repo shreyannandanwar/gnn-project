@@ -1,0 +1,16 @@
+README.md
+setup.py
+data/__init__.py
+evaluation/__init__.py
+evaluation/metrics.py
+evaluation/runner.py
+models/__init__.py
+multitask_3d_gnn.egg-info/PKG-INFO
+multitask_3d_gnn.egg-info/SOURCES.txt
+multitask_3d_gnn.egg-info/dependency_links.txt
+multitask_3d_gnn.egg-info/top_level.txt
+scripts/__init__.py
+tests/__init__.py
+tests/test_phase0.py
+training/__init__.py
+training/trainer.py
