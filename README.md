@@ -22,6 +22,7 @@ This project implements a novel multi-task learning approach for molecular prope
 ---
 
 ## 📁 Project Structure
+```
 project/
 ├── data/
 │ ├── init.py
@@ -79,7 +80,7 @@ project/
 ├── setup.py
 └── README.md
 
-text
+```
 
 
 ---
@@ -88,7 +89,7 @@ text
 
 ### 1. Environment Setup
 
-```bash
+```
 # Create conda environment
 conda create -n mol3d python=3.9 -y
 conda activate mol3d
@@ -106,11 +107,14 @@ pip install -r requirements.txt
 
 # Install project in editable mode
 pip install -e .
+```
+```
 2. Verify Installation
-Bash
+```
 
 # Run Phase 0 tests
 python -m pytest tests/test_phase0.py -v
+```
 📊 Datasets (MoleculeNet — Classification)
 Dataset	Tasks	Molecules	Metric	Split
 Tox21	12	~7,831	ROC-AUC	Scaffold
@@ -126,13 +130,14 @@ All splits use scaffold splitting for realistic generalization evaluation (train
 Phase 1: Data Preprocessing
 Objective: Load datasets, verify scaffold splits, generate 3D molecular graphs.
 
-Bash
+```
 
 # Download and process all datasets
 python scripts/preprocess_phase1.py
 
 # Verify processing
 python -m pytest tests/test_phase1.py -v
+```
 Outputs:
 
 data/processed/{dataset}_raw.pkl - Raw datasets with splits
@@ -143,7 +148,7 @@ Duration: ~10-15 minutes
 Phase 2: Single-Task Baselines
 Objective: Establish strong single-task performance benchmarks.
 
-Bash
+```
 
 # Train single-task model for BBBP
 python scripts/train_single_task.py --dataset bbbp --device cuda
@@ -159,6 +164,7 @@ python scripts/train_all_baselines.py cuda
 
 # Verify models
 python -m pytest tests/test_phase2.py -v
+```
 Expected Results:
 
 Dataset	Task	Expected ROC-AUC
@@ -173,13 +179,14 @@ Phase 3: Multi-Task Learning
 Objective: Train multi-task models with gradient analysis and PCGrad.
 
 3a. Gradient Conflict Analysis
-Bash
+```
 
 # Analyze gradient conflicts between tasks
 python scripts/analyze_gradients.py --device cuda
 
 # Quick test with fewer datasets
 python scripts/analyze_gradients.py --datasets bbbp bace --device cuda
+```
 Outputs:
 
 results/gradient_analysis/gradient_similarity_matrix.png
@@ -187,7 +194,7 @@ results/gradient_analysis/gradient_analysis.pkl
 Duration: ~10 minutes
 
 3b. Hard Sharing Baseline
-Bash
+```
 
 # Naive multi-task learning (shared encoder, no task conditioning)
 python scripts/train_multitask.py \
@@ -195,10 +202,11 @@ python scripts/train_multitask.py \
     --datasets bbbp bace hiv clintox tox21 \
     --seed 0 \
     --device cuda
+```
 Duration: ~2-3 hours per seed
 
 3c. Task-Conditioned Model
-Bash
+```
 
 # Novel architecture with task embeddings
 python scripts/train_multitask.py \
@@ -207,6 +215,7 @@ python scripts/train_multitask.py \
     --task_dim 64 \
     --seed 0 \
     --device cuda
+```
 Expected Improvement: +1-2% average ROC-AUC over hard sharing
 
 Duration: ~2-3 hours per seed
@@ -226,21 +235,22 @@ Expected Improvement: +2-3% average ROC-AUC over hard sharing
 Duration: ~2-3 hours per seed
 
 3e. Multi-Seed Ablation Study
-Bash
+```
 
 # Run all models with 5 seeds (for publication)
 chmod +x scripts/run_ablation_study.sh
 ./scripts/run_ablation_study.sh
+```
 Duration: ~24-30 hours total
 
 3f. Compare Results
-Bash
+```
 
 # Generate comparison table
 python scripts/compare_multitask_results.py
+```
 Output:
 
-text
 
 ================================================================================
 MULTI-TASK MODEL COMPARISON
@@ -271,10 +281,11 @@ TASK CONDITIONED PCGRAD
   Tasks improved: 15/17 (88.2%)
 ================================================================================
 3g. Run Tests
-Bash
+```
 
 # Verify all Phase 3 components
 python -m pytest tests/test_phase3.py -v
+```
 📈 Expected Performance Summary
 Model	Avg ROC-AUC	Δ vs Hard Sharing	Tasks Improved
 Single-Task (baseline)	0.7234 ± 0.0156	-	-
@@ -284,7 +295,7 @@ Task-Conditioned + PCGrad	0.7734 ± 0.0087	+6.91%	15/17 (88%)
 🧪 Testing
 All phases have comprehensive test coverage:
 
-Bash
+```
 
 # Run all tests
 python -m pytest tests/ -v
@@ -296,6 +307,7 @@ python -m pytest tests/test_phase3.py -v
 
 # Run with coverage report
 python -m pytest tests/ --cov=. --cov-report=html
+```
 Test Coverage:
 
 Phase 0: Infrastructure (metrics, trainer, early stopping)
@@ -323,7 +335,7 @@ MoleculeNet: Wu et al. "MoleculeNet: A Benchmark for Molecular Machine Learning"
 Model Hyperparameters
 Default configuration in configs/default.yaml:
 
-YAML
+```
 
 model:
   hidden_dim: 128        # GNN hidden dimension
@@ -344,10 +356,10 @@ training:
 data:
   split: scaffold        # Scaffold-based splitting
   missing_label: -1      # Indicator for missing labels
+```
 Override per-dataset in configs/{dataset}.yaml.
 
 📊 Results Structure
-text
 
 results/
 ├── gradient_analysis/
@@ -360,7 +372,7 @@ results/
 Each result file contains:
 
 JSON
-
+```
 {
   "model": "task_conditioned_pcgrad",
   "datasets": ["bbbp", "bace", "hiv", "clintox", "tox21"],
@@ -374,18 +386,20 @@ JSON
   },
   "config": {...}
 }
-🐛 Troubleshooting
+```
+### Troubleshooting
 Common Issues
 Out of Memory
-Bash
+```
 
 # Reduce batch size
 python scripts/train_multitask.py --batch_size 32
 
 # Reduce model size
 python scripts/train_multitask.py --hidden_dim 64 --num_layers 3
+```
 Slow Training
-Bash
+```
 
 # Use CPU for testing
 python scripts/train_multitask.py --device cpu
@@ -403,8 +417,9 @@ Bash
 
 # Or disable SSL verification (not recommended for production)
 export PYTHONHTTPSVERIFY=0
+```
 Import Errors
-Bash
+```
 
 # Ensure you're in project root
 cd /path/to/gnn-project
@@ -414,6 +429,7 @@ pip install -e .
 
 # Add to PYTHONPATH
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+```
 🤝 Contributing
 This is a research project. Key areas for contribution:
 
