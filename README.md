@@ -1,8 +1,3 @@
-Updated README.md
-File: README.md
-
-Markdown
-
 # Task-Conditioned Multi-Task 3D GNN for Molecular Property Benchmark Optimization
 
 **Feature 1** of a research-oriented AI for Drug Discovery project.
@@ -108,10 +103,9 @@ pip install -r requirements.txt
 # Install project in editable mode
 pip install -e .
 ```
-```
+
 2. Verify Installation
 ```
-
 # Run Phase 0 tests
 python -m pytest tests/test_phase0.py -v
 ```
@@ -149,7 +143,6 @@ Phase 2: Single-Task Baselines
 Objective: Establish strong single-task performance benchmarks.
 
 ```
-
 # Train single-task model for BBBP
 python scripts/train_single_task.py --dataset bbbp --device cuda
 
@@ -165,6 +158,7 @@ python scripts/train_all_baselines.py cuda
 # Verify models
 python -m pytest tests/test_phase2.py -v
 ```
+
 Expected Results:
 
 Dataset	Task	Expected ROC-AUC
@@ -221,7 +215,7 @@ Expected Improvement: +1-2% average ROC-AUC over hard sharing
 Duration: ~2-3 hours per seed
 
 3d. Task-Conditioned + PCGrad
-Bash
+```
 
 # Full model with gradient conflict mitigation
 python scripts/train_multitask.py \
@@ -230,6 +224,7 @@ python scripts/train_multitask.py \
     --datasets bbbp bace hiv clintox tox21 \
     --seed 0 \
     --device cuda
+```
 Expected Improvement: +2-3% average ROC-AUC over hard sharing
 
 Duration: ~2-3 hours per seed
