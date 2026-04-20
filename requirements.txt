@@ -37,7 +37,3 @@ torch
 numpy 
 matplotlib 
 scikit-learn
-seaborn
-
-# ── Tests ─────────────────────────────────────────────────
-pytest
