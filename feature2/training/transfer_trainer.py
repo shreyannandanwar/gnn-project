@@ -32,7 +32,7 @@ class TransferEarlyStopping:
         self.min_delta = min_delta
         self.best_score = None
         self.counter = 0
-        self.best_state = None
+        self.ckpt_path = None
 
     def step(self, score: float, model: nn.Module) -> bool:
         """
@@ -41,9 +41,9 @@ class TransferEarlyStopping:
         if self.best_score is None or score > self.best_score + self.min_delta:
             self.best_score = score
             self.counter = 0
-            self.best_state = {
-                k: v.cpu().clone() for k, v in model.state_dict().items()
-            }
+            if self.ckpt_path is not None:
+                os.makedirs(os.path.dirname(self.ckpt_path) or ".", exist_ok=True)
+                torch.save(model.state_dict(), self.ckpt_path)
         else:
             self.counter += 1
 
@@ -51,8 +51,10 @@ class TransferEarlyStopping:
 
     def restore_best(self, model: nn.Module):
         """Restore model to best checkpoint."""
-        if self.best_state is not None:
-            model.load_state_dict(self.best_state)
+        if self.ckpt_path is not None and os.path.exists(self.ckpt_path):
+            model_device = next(model.parameters()).device
+            state = torch.load(self.ckpt_path, map_location=model_device)
+            model.load_state_dict(state)
 
 
 # ─────────────────────────────────────────────
@@ -118,6 +120,10 @@ class TransferTrainer:
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode="max", factor=0.5, patience=10
         )
+        self._use_cuda_amp = torch.cuda.is_available() and str(device).startswith("cuda")
+        self.scaler = torch.amp.GradScaler(
+            "cuda", enabled=self._use_cuda_amp
+        )
 
         # Early stopping
         self.early_stopping = TransferEarlyStopping(patience=self.patience)
@@ -134,7 +140,9 @@ class TransferTrainer:
             dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=0,
+            num_workers=4,
+            pin_memory=torch.cuda.is_available(),
+            persistent_workers=True,
         )
 
     def _train_epoch(self, loader) -> float:
@@ -146,15 +154,18 @@ class TransferTrainer:
             batch = batch.to(self.device)
             self.optimizer.zero_grad()
 
-            loss = self.model.compute_loss(batch)
-            loss.backward()
+            with torch.amp.autocast("cuda", enabled=self._use_cuda_amp):
+                loss = self.model.compute_loss(batch)
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(self.optimizer)
 
             if self.grad_clip > 0:
                 nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.grad_clip
                 )
 
-            self.optimizer.step()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
             total_loss += loss.item()
             n_batches += 1
 
@@ -239,6 +250,10 @@ class TransferTrainer:
             print(f"{'='*60}")
 
         start_time = time.time()
+        best_ckpt_path = os.path.join(
+            self.checkpoint_dir, f"{experiment_name}_best.pt"
+        )
+        self.early_stopping.ckpt_path = best_ckpt_path
 
         for epoch in range(self.epochs):
             # Train

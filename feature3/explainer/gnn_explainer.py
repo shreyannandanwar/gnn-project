@@ -147,6 +147,14 @@ class GNNExplainer:
         patience_counter = 0
         EARLY_STOP_PATIENCE = 30
 
+        masked_data = Data(
+            x=data.x.clone(),
+            edge_index=data.edge_index,
+            edge_attr=data.edge_attr,
+            pos=getattr(data, 'pos', None),
+            batch=data.batch,
+        )
+
         for epoch in range(self.epochs):
             optimizer.zero_grad()
 
@@ -156,15 +164,7 @@ class GNNExplainer:
 
             # Apply node feature mask to input features
             masked_x = data.x * feat_weight.unsqueeze(0)
-
-            # Build masked data
-            masked_data = Data(
-                x=masked_x,
-                edge_index=data.edge_index,
-                edge_attr=data.edge_attr,
-                pos=data.pos if hasattr(data, 'pos') else None,
-                batch=data.batch,
-            )
+            masked_data.x = masked_x
 
             # Forward with edge weight mask
             logits = self.model(
@@ -332,16 +332,13 @@ class GNNExplainer:
             [N] node importance scores
         """
         src, dst = edge_index[0], edge_index[1]
-        node_scores = torch.zeros(num_nodes)
-        node_counts = torch.zeros(num_nodes)
+        node_scores = torch.zeros(num_nodes, device=edge_mask.device, dtype=edge_mask.dtype)
+        node_counts = torch.zeros(num_nodes, device=edge_mask.device, dtype=edge_mask.dtype)
 
-        for k in range(edge_mask.shape[0]):
-            score = edge_mask[k].item()
-            s, d = src[k].item(), dst[k].item()
-            node_scores[s] += score
-            node_scores[d] += score
-            node_counts[s] += 1
-            node_counts[d] += 1
+        node_scores.scatter_add_(0, src, edge_mask)
+        node_scores.scatter_add_(0, dst, edge_mask)
+        one_mask = torch.ones_like(edge_mask)
+        node_counts.scatter_add_(0, src, one_mask)
+        node_counts.scatter_add_(0, dst, one_mask)
 
-        node_counts = node_counts.clamp(min=1.0)
-        return node_scores / node_counts
+        return node_scores / node_counts.clamp(min=1.0)

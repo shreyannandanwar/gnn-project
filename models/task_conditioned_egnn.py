@@ -367,13 +367,15 @@ class MultiTaskClassifier(nn.Module):
             task_ids = task_ids.unsqueeze(0)
         task_ids = task_ids.to(device)
 
+        all_logits = self.forward(batch, task_ids)
+
         unique_tasks = task_ids.unique()
         losses = {}
 
         for tid in unique_tasks:
             mask = task_ids == tid
             if mask.sum() > 0:
-                task_logits = self.forward(batch, task_ids)[mask]
+                task_logits = all_logits[mask]
                 task_labels = batch.y[mask].to(device)
                 losses[tid.item()] = F.binary_cross_entropy_with_logits(
                     task_logits.squeeze(-1), task_labels
@@ -467,13 +469,15 @@ class HardSharingClassifier(nn.Module):
             task_ids = task_ids.unsqueeze(0)
         task_ids = task_ids.to(device)
 
+        all_logits = self.forward(batch, task_ids)
+
         unique_tasks = task_ids.unique()
         losses = {}
 
         for tid in unique_tasks:
             mask = task_ids == tid
             if mask.sum() > 0:
-                task_logits = self.forward(batch, task_ids)[mask]
+                task_logits = all_logits[mask]
                 task_labels = batch.y[mask].to(device)
                 losses[tid.item()] = F.binary_cross_entropy_with_logits(
                     task_logits.squeeze(-1), task_labels

@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool
-from torch_geometric.utils import add_self_loops
+from torch_geometric.utils import add_self_loops, contains_self_loops
 
 
 class EGNNLayer(nn.Module):
@@ -153,15 +153,16 @@ class EGNN(nn.Module):
         edge_attr = batch.edge_attr
         
         # Add self-loops for better propagation
-        edge_index, _ = add_self_loops(edge_index, num_nodes=h.size(0))
-        
-        # Pad edge_attr for self-loops (zeros)
-        num_self_loops = h.size(0)
-        self_loop_attr = torch.zeros(
-            num_self_loops, edge_attr.size(1),
-            device=edge_attr.device, dtype=edge_attr.dtype
-        )
-        edge_attr = torch.cat([edge_attr, self_loop_attr], dim=0)
+        if not contains_self_loops(edge_index):
+            edge_index, _ = add_self_loops(edge_index, num_nodes=h.size(0))
+
+            # Pad edge_attr for self-loops (zeros)
+            num_self_loops = h.size(0)
+            self_loop_attr = torch.zeros(
+                num_self_loops, edge_attr.size(1),
+                device=edge_attr.device, dtype=edge_attr.dtype
+            )
+            edge_attr = torch.cat([edge_attr, self_loop_attr], dim=0)
         
         # Message passing
         for layer in self.layers:

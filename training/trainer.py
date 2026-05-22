@@ -18,14 +18,14 @@ from evaluation.metrics import compute_roc_auc
 # Reproducibility
 # ─────────────────────────────────────────────────────────────────────────────
 
-def set_seed(seed: int):
+def set_seed(seed: int, deterministic: bool = False):
     """Fix all random sources for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = not deterministic
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +109,10 @@ class Trainer:
 
         self.es = EarlyStopping(patience=cfg.get("patience", 30))
 
+        use_cuda_amp = torch.cuda.is_available() and str(device).startswith("cuda")
+        self.scaler = torch.amp.GradScaler("cuda", enabled=use_cuda_amp)
+        self._use_cuda_amp = use_cuda_amp
+
         self.history = {"train_loss": [], "val_auc": []}
 
     # ── single epoch ─────────────────────────────────────────────────────────
@@ -119,10 +123,15 @@ class Trainer:
         for batch in self.train_loader:
             batch = batch.to(self.device)
             self.optimizer.zero_grad()
-            loss = self.model.compute_loss(batch)
-            loss.backward()
+
+            with torch.amp.autocast("cuda", enabled=self._use_cuda_amp):
+                loss = self.model.compute_loss(batch)
+
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            self.optimizer.step()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
             total_loss += loss.item()
         return total_loss / max(len(self.train_loader), 1)
 

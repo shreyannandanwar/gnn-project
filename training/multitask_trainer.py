@@ -95,6 +95,8 @@ class MultiTaskTrainer:
         self.patience_counter = 0
         self.patience = cfg.get("patience", 30)
         self.start_epoch = 1
+        self._use_cuda_amp = torch.cuda.is_available() and self.device.type == "cuda"
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self._use_cuda_amp)
 
         self.history = {
             "train_loss": [],
@@ -163,7 +165,8 @@ class MultiTaskTrainer:
 
             if self.use_pcgrad:
                 # ── PCGrad path ──────────────────────────────────────
-                task_losses = self.model.compute_per_task_losses(batch)
+                with torch.amp.autocast("cuda", enabled=self._use_cuda_amp):
+                    task_losses = self.model.compute_per_task_losses(batch)
 
                 if not task_losses:
                     continue
@@ -178,8 +181,20 @@ class MultiTaskTrainer:
                     )
 
                 self.optimizer.zero_grad()
-                stats = self.optimizer.backward(losses)
-                self.optimizer.step()
+                scaled_losses = [self.scaler.scale(loss) for loss in losses]
+                orig_max_norm = self.optimizer.max_norm
+                if self._use_cuda_amp:
+                    self.optimizer.max_norm = 0.0
+                stats = self.optimizer.backward(scaled_losses)
+                if self._use_cuda_amp:
+                    self.optimizer.max_norm = orig_max_norm
+                self.scaler.unscale_(self._base_optimizer)
+                if self._use_cuda_amp and orig_max_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), max_norm=orig_max_norm
+                    )
+                self.scaler.step(self._base_optimizer)
+                self.scaler.update()
 
                 if stats and self.log_pcgrad_stats:
                     epoch_pcgrad_stats.append(stats)
@@ -189,17 +204,20 @@ class MultiTaskTrainer:
             else:
                 # ── Standard path ────────────────────────────────────
                 self.optimizer.zero_grad()
-                loss = self.model.compute_loss(batch)
+                with torch.amp.autocast("cuda", enabled=self._use_cuda_amp):
+                    loss = self.model.compute_loss(batch)
 
                 assert loss.device.type == self.device.type, (
                     f"Loss device mismatch: {loss.device} vs {self.device}"
                 )
 
-                loss.backward()
+                self.scaler.scale(loss).backward()
+                self.scaler.unscale_(self._base_optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(), max_norm=1.0
                 )
-                self.optimizer.step()
+                self.scaler.step(self._base_optimizer)
+                self.scaler.update()
                 batch_loss = loss.item()
 
             total_loss += batch_loss
@@ -299,14 +317,15 @@ class MultiTaskTrainer:
                 self.history["pcgrad_stats"].append(pcgrad_stats)
 
             # ── Per-epoch resume checkpoint ───────────────────────────
-            torch.save({
-                "model": self.model.state_dict(),
-                "optimizer": self._base_optimizer.state_dict(),
-                "best_avg_auc": self.best_avg_auc,
-                "patience_counter": self.patience_counter,
-                "epoch": epoch,
-                "history": self.history,
-            }, self._resume_path)
+            if epoch % 10 == 0 or self.patience_counter >= self.patience:
+                torch.save({
+                    "model": self.model.state_dict(),
+                    "optimizer": self._base_optimizer.state_dict(),
+                    "best_avg_auc": self.best_avg_auc,
+                    "patience_counter": self.patience_counter,
+                    "epoch": epoch,
+                    "history": self.history,
+                }, self._resume_path)
 
             # ── Logging ──────────────────────────────────────────────
             log_line = (
